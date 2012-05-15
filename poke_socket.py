@@ -69,10 +69,23 @@ class PokeSocket(object):
 
 	def send(self, msg_body, msg_type):
 		size = len(msg_body) + 1 # msg_body + msg_type
-		send = struct.pack('>II', size, msg_type) + msg_body
+		send = struct.pack('>HB', size, msg_type) + msg_body
 		totalsent = 0
 		while totalsent < size:
 			sent = self.sock.send(send[totalsent:])
 			if sent == 0:
 				raise RuntimeError("socket connection error")
 			totalsent = totalsent + sent
+	
+	def recv(self):
+		msg = ''
+		size_str = self.sock.recv(2)
+		if size_str == ''
+			raise RuntimeError("socket connection error")
+		size = struct.unpack('>H', size_str)
+		while len(msg) < size:
+			chunk = self.sock.recv(size - len(msg))
+			if chunk == '':
+				raise RuntimeError("sockect connection error")
+			msg = msg + chunk
+		return msg
