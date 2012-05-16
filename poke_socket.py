@@ -85,6 +85,7 @@ class PokeSocket(object):
 			self.sock.close()
 			raise RuntimeError("socket connection error")
 		size = struct.unpack('>H', size_str)
+		print size
 		while len(msg) < size:
 			chunk = self.sock.recv(size - len(msg))
 			if chunk == '':
