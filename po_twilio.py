@@ -8,6 +8,10 @@ def make_q_string(s):
 	msg += s.encode('utf_16_be')
 	return msg
 
+def make_py_string(s):
+	size = struct.unpack('>I', s[:4])
+	return s[4:4+size[0]].decode('utf_16_be')
+
 # Poke as represented in a team
 class TeamPoke(object):
 
@@ -92,22 +96,72 @@ class FullPlayerInfo(object):
 
 		return msg
 
+class BattleMove(object):
+
+	def __init__(self, msg):
+		self.move_num = struct.unpack('>H', msg[:2])
+		self.current_pp = struct.unpack('>B', msg[2])
+		self.total_pp = struct.unpack('>B', msg[3])
+
 # Poke used in battle
 class BattlePoke(object):
 
 	def __init__(self, msg):
-		self.poke_num = struct.unpack('>H', msg[0:1])[0]
-		self.sub_num = struct.unpack('>B', msg[2])[0]
+		fields = struct.unpack('>HB', msg[0:3])
+		self.poke_num = fields[0]
+		self.sub_num = fields[1]
+		self.name = make_py_string(msg[3:])
+		self.offset = 7 + (len(self.name)*2) # poke_num + sub_num + name_size + name
+		self.total_hp = struct.unpack('>H', msg[self.offset:self.offset+2])[0]
+		self.current_hp = struct.unpack('>H', msg[self.offset+2:self.offset+4])[0]
+		self.gender = struct.unpack('>B', msg[self.offset+4])[0]
+		self.shiny = struct.unpack('>B', msg[self.offset+5])[0]
+		self.level = struct.unpack('>B', msg[self.offset+6])[0]
+		self.item = struct.unpack('>H', msg[self.offset+7:self.offset+9])[0]
+		self.ability = struct.unpack('>H', msg[self.offset+9:self.offset+11])[0]
+		self.happiness = struct.unpack('>B', msg[self.offset+11])[0]
+
+		self.stats = [0,0,0,0,0]
+		for i in range(5):
+			self.stats[i] = struct.unpack('>H', msg[self.offset+12+(i*2):self.offset+14+(i*2)])[0]
+
+		self.moves = []
+		for i in range(4):
+			self.moves.append(BattleMove(msg[22+(i*4):26+(i*4)]))
+
+		self.EVs = [0,0,0, 0,0,0]
+		for i in range(6):
+			self.EVs[i] = struct.unpack('>I', msg[self.offset+38+(i*4):self.offset+42+(i*4)])[0]
+
+		self.DVs = [0,0,0, 0,0,0]
+		for i in range(6):
+			self.DVs[i] = struct.unpack('>I', msg[self.offset+62+(i*4):self.offset+66+(i*4)])[0]
+		self.offset += 86
 
 # Team used for battle
-#class BattleTeam(object):
+class BattleTeam(object):
 
-print struct.pack('>H', 3)
+	def __init__(self, msg):
+		self.pokes = []
+		offset = 0
+		for i in range(6):
+			self.pokes.append(BattlePoke(msg[offset:]))
+			offset += self.pokes[i].offset
+			print self.pokes[i].__dict__.items()
+
+class BattleConf(object):
+
+	def __init__(self, msg):
+		self.gen = struct.unpack('>B', msg[0])[0]
+		self.mode = struct.unpack('>B', msg[1])[0]
+		self.id_1 = struct.unpack('>I', msg[2:6])[0]
+		self.id_2 = struct.unpack('>I', msg[6:10])[0]
+		self.clauses = struct.unpack('>I', msg[10:14])[0]
+
 s = PokeSocket('188.165.249.120', 5080)
 s.send(FullPlayerInfo('Twilio Client').serialize(), poke_socket.LOGIN); 
 s.recv() # Don't care about the server's response
 
-# TODO: pick challenge cup
 # Find a battle
 flags = 2 # Only flag we want is forceSameTier
 msg = struct.pack('>I', flags)
@@ -124,8 +178,6 @@ while 1:
 		p2_id = struct.unpack('>I', msg[9:13])[0]
 		if p1_id == 0: # This is us!
 			print 'Battle found!'
-			#break
-	#else:
-	#	print 'Unrecognized message received'
-
+			bc = BattleConf(msg[13:])
+			team = BattleTeam(msg[27:])
 s.close()
