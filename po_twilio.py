@@ -89,3 +89,12 @@ class FullPlayerInfo(object):
 
 s = PokeSocket('188.165.249.120', 5080)
 s.send(FullPlayerInfo('Twilio Client').serialize(), poke_socket.LOGIN); 
+
+while 1:
+	msg = s.recv()
+	cmd = struct.unpack('>B', msg[0])
+	print msg
+	if cmd == poke_socket.LOGIN:
+		print 'Login command successfully received!'
+	else:
+		print 'Unrecognized message received'
