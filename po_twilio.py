@@ -95,8 +95,8 @@ class FullPlayerInfo(object):
 class BattlePoke(object):
 
 	def __init__(self, msg):
-		self.poke_num = struct.unpack('>H', msg[0:1])
-		self.sub_num = struct.unpack('>B', msg[2])
+		self.poke_num = struct.unpack('>H', msg[0:1])[0]
+		self.sub_num = struct.unpack('>B', msg[2])[0]
 
 # Team used for battle
 #class BattleTeam(object):
@@ -112,20 +112,20 @@ flags = 2 # Only flag we want is forceSameTier
 msg = struct.pack('>I', flags)
 msg = struct.pack('>B', 200) # range
 msg = struct.pack('>B', 0) # Don't really know why this is needed
-s.send(msg, poke_sockt.FINDBATTLE)
+s.send(msg, poke_socket.FINDBATTLE)
 
 while 1:
 	msg = s.recv()
-	cmd = struct.unpack('>B', msg[0])
-	print msg
+	cmd = struct.unpack('>B', msg[0])[0]
 	if cmd == poke_socket.ENGAGEBATTLE:
-		battle_id = struct.unpack('>I', msg[1:4])
-		p1_id = struct.unpack('>I', msg[5:8])
-		p2_id = struct.unpack('>I', msg[9:12])
+		print 'BATTLE'
+		battle_id = struct.unpack('>I', msg[1:5])[0]
+		p1_id = struct.unpack('>I', msg[5:9])[0]
+		p2_id = struct.unpack('>I', msg[9:13])[0]
 		if p1_id == 0: # This is us!
 			print 'Battle found!'
 			break
-	else:
-		print 'Unrecognized message received'
+	#else:
+	#	print 'Unrecognized message received'
 
 s.close()

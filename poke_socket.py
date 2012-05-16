@@ -80,12 +80,14 @@ class PokeSocket(object):
 	
 	def recv(self):
 		msg = ''
-		size_str = self.sock.recv(2)
-		if size_str == '':
-			self.sock.close()
-			raise RuntimeError("socket connection error")
-		size = struct.unpack('>H', size_str)
-		print size
+		size_str = ''
+		while len(size_str) < 2:
+			read = self.sock.recv(1)
+			if read == '':
+				self.sock.close()
+				raise RuntimeError("socket connection error")
+			size_str += read
+		size = struct.unpack('>H', size_str)[0]
 		while len(msg) < size:
 			chunk = self.sock.recv(size - len(msg))
 			if chunk == '':
