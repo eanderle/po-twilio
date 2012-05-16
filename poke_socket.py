@@ -1,4 +1,5 @@
 import socket
+import struct
 
 WHATAREYOU = 0
 WHOAREYOU = 1
@@ -81,11 +82,16 @@ class PokeSocket(object):
 		msg = ''
 		size_str = self.sock.recv(2)
 		if size_str == '':
+			self.sock.close()
 			raise RuntimeError("socket connection error")
 		size = struct.unpack('>H', size_str)
 		while len(msg) < size:
 			chunk = self.sock.recv(size - len(msg))
 			if chunk == '':
+				self.sock.close()
 				raise RuntimeError("sockect connection error")
 			msg = msg + chunk
 		return msg
+
+	def close(self):
+		self.sock.close()

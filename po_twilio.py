@@ -1,12 +1,20 @@
+import struct
 from poke_socket import PokeSocket
+import poke_socket
 
-# Poke as represented in a team (ie, in battle)
+def make_q_string(s):
+	# QStrings are twice the size of python strings
+	msg = struct.pack('>I', 2*len(s))
+	msg += s.encode('utf_16_be')
+	return msg
+
+# Poke as represented in a team
 class TeamPoke(object):
 
 	def __init__(self):
 		self.poke_num = 173
 		self.sub_num = 0
-		self.name = "LOLZ\0"
+		self.name = "LOLZ"
 		self.item = 71
 		self.ability = 98
 		self.nature = 0
@@ -14,17 +22,14 @@ class TeamPoke(object):
 		self.shiny = 1
 		self.happiness = 127
 		self.level = 100
-		self.moves[0] = 118
-		self.moves[1] = 227
-		self.moves[2] = 150
-		self.moves[3] = 271
-		DVs[:5] = 31
-		EVs[:5] = 10
+		self.moves = [118, 227, 150, 271]
+		self.DVs = [31, 31, 31, 31, 31, 31]
+		self.EVs = [10, 10, 10, 10, 10, 10]
 	
-	def serialize():
+	def serialize(self):
 		msg = struct.pack('>H', self.poke_num)
 		msg += struct.pack('>B', self.sub_num)
-		msg += self.name
+		msg += make_q_string(self.name)
 		msg += struct.pack('>H', self.item)
 		msg += struct.pack('>H', self.ability)
 		msg += struct.pack('>B', self.nature)
@@ -43,11 +48,10 @@ class TeamPoke(object):
 # The actual team (I did not design/name these classes originally)
 # Going to have to extend this to be able to receive a team over the wire
 class Team(object):
-
 	def serialize(self):
 		msg = ''
 		for i in range(6):
-			msg += TeamPoke.serialize()
+			msg += TeamPoke().serialize()
 		return msg
 
 # Player as represented in the teambuilder
@@ -58,19 +62,19 @@ class PlayerTeam(object):
 	
 	# Prepare the PlayerTeam to be sent over the wire
 	def serialize(self):
-		msg = self.name
-		msg += "Hi! I'm the Twilio PO client!\0" # Player info
-		msg += "Darn! I lost!\0" # Lose message
-		msg += "Yeah! I won!\0"  # Win message
+		msg = make_q_string(self.name)
+		msg += make_q_string("Hi! I'm the Twilio PO client!") # Player info
+		msg += make_q_string("Darn! I lost!") # Lose message
+		msg += make_q_string("Yeah! I won!")  # Win message
 		msg += struct.pack('>H', 42) # Avatar ID
-		msg += Team.serialize()
+		msg += Team().serialize()
 		return msg
 
 # Used for logging into the server
 class FullPlayerInfo(object):
 	
 	def __init__(self, name):
-		self.name = name + '\0'
+		self.name = name
 	
 	def serialize(self):
 		msg = PlayerTeam(self.name).serialize()
@@ -87,10 +91,22 @@ class FullPlayerInfo(object):
 
 		return msg
 
+# Poke used in battle
+class BattlePoke(object):
+
+	def __init__(self, msg):
+		self.poke_num = struct.unpack('>H', msg[0:1])
+		self.sub_num = struct.unpack('>B', msg[2])
+
+# Team used for battle
+#class BattleTeam(object):
+
+print struct.pack('>H', 3)
 s = PokeSocket('188.165.249.120', 5080)
 s.send(FullPlayerInfo('Twilio Client').serialize(), poke_socket.LOGIN); 
 s.recv() # Don't care about the server's response
 
+# TODO: pick challenge cup
 # Find a battle
 flags = 2 # Only flag we want is forceSameTier
 msg = struct.pack('>I', flags)
@@ -102,8 +118,14 @@ while 1:
 	msg = s.recv()
 	cmd = struct.unpack('>B', msg[0])
 	print msg
-	if cmd == poke_socket.LOGIN:
-		# Don't care about the server's response
-		print 'Login command successfully received!'
+	if cmd == poke_socket.ENGAGEBATTLE:
+		battle_id = struct.unpack('>I', msg[1:4])
+		p1_id = struct.unpack('>I', msg[5:8])
+		p2_id = struct.unpack('>I', msg[9:12])
+		if p1_id == 0: # This is us!
+			print 'Battle found!'
+			break
 	else:
 		print 'Unrecognized message received'
+
+s.close()
