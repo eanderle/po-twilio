@@ -12,17 +12,17 @@ def make_q_string(s):
 class TeamPoke(object):
 
 	def __init__(self):
-		self.poke_num = 173
+		self.poke_num = 1
 		self.sub_num = 0
 		self.name = "LOLZ"
 		self.item = 71
-		self.ability = 98
+		self.ability = 65
 		self.nature = 0
-		self.gender = 1
+		self.gender = 2
 		self.shiny = 1
-		self.happiness = 127
+		self.happiness = 0
 		self.level = 100
-		self.moves = [118, 227, 150, 271]
+		self.moves = [213, 445, 204, 203]
 		self.DVs = [31, 31, 31, 31, 31, 31]
 		self.EVs = [10, 10, 10, 10, 10, 10]
 	
@@ -49,7 +49,7 @@ class TeamPoke(object):
 # Going to have to extend this to be able to receive a team over the wire
 class Team(object):
 	def serialize(self):
-		msg = ''
+		msg = struct.pack('>B', 5) # gen 5
 		for i in range(6):
 			msg += TeamPoke().serialize()
 		return msg
@@ -67,6 +67,7 @@ class PlayerTeam(object):
 		msg += make_q_string("Darn! I lost!") # Lose message
 		msg += make_q_string("Yeah! I won!")  # Win message
 		msg += struct.pack('>H', 42) # Avatar ID
+		msg += make_q_string('Challenge Cup') # Default tier
 		msg += Team().serialize()
 		return msg
 
@@ -118,13 +119,12 @@ while 1:
 	msg = s.recv()
 	cmd = struct.unpack('>B', msg[0])[0]
 	if cmd == poke_socket.ENGAGEBATTLE:
-		print 'BATTLE'
 		battle_id = struct.unpack('>I', msg[1:5])[0]
 		p1_id = struct.unpack('>I', msg[5:9])[0]
 		p2_id = struct.unpack('>I', msg[9:13])[0]
 		if p1_id == 0: # This is us!
 			print 'Battle found!'
-			break
+			#break
 	#else:
 	#	print 'Unrecognized message received'
 
