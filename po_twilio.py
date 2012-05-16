@@ -89,12 +89,21 @@ class FullPlayerInfo(object):
 
 s = PokeSocket('188.165.249.120', 5080)
 s.send(FullPlayerInfo('Twilio Client').serialize(), poke_socket.LOGIN); 
+s.recv() # Don't care about the server's response
+
+# Find a battle
+flags = 2 # Only flag we want is forceSameTier
+msg = struct.pack('>I', flags)
+msg = struct.pack('>B', 200) # range
+msg = struct.pack('>B', 0) # Don't really know why this is needed
+s.send(msg, poke_sockt.FINDBATTLE)
 
 while 1:
 	msg = s.recv()
 	cmd = struct.unpack('>B', msg[0])
 	print msg
 	if cmd == poke_socket.LOGIN:
+		# Don't care about the server's response
 		print 'Login command successfully received!'
 	else:
 		print 'Unrecognized message received'
