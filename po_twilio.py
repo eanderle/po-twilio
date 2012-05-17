@@ -2,6 +2,54 @@ import struct
 from poke_socket import PokeSocket
 import poke_socket
 
+SENDOUT = 0
+SENDBACK = 1
+USEATTACK = 2
+OFFERCHOICE = 3
+BEGINTURN = 4
+CHANGEPP = 5
+CHANGEHP = 6
+KO = 7
+EFFECTIVE = 8
+MISS = 9
+CRITICALHIT = 10
+HIT = 11
+STATCHANGE = 12
+STATUSCHANGE = 13
+STATUSMESSAGE = 14
+FAILED = 15
+BATTLECHAT = 16
+MOVEMESSAGE = 17
+ITEMMESSAGE = 18
+NOOPPONENT = 19
+FLINCH = 20
+RECOIL = 21
+WEATHERMESSAGE = 22
+STRAIGHTDAMAGE = 23
+ABILITYMESSAGE = 24
+ABSSTATUSCHANGE, = 25
+SUBSTITUTE = 26
+BATTLEEND = 27
+BLANKMESSAGE = 28
+CANCELMOVE = 29
+CLAUSE = 30
+DYNAMICINFO = 31
+DYNAMICSTATS = 32
+SPECTATING = 33
+SPECTATORCHAT = 34
+ALREADYSTATUSMESSAGE = 35
+TEMPPOKECHANGE = 36
+CLOCKSTART = 37
+CLOCKSTOP = 38
+RATED = 39
+TIERSECTION = 40
+ENDMESSAGE = 41
+POINTESTIMATE = 42
+MAKEYOURCHOICE = 43
+AVOID = 44
+REARRANGETEAM = 45
+SPOTSHIFT = 46
+
 def make_q_string(s):
 	# QStrings are twice the size of python strings
 	msg = struct.pack('>I', 2*len(s))
@@ -11,6 +59,24 @@ def make_q_string(s):
 def make_py_string(s):
 	size = struct.unpack('>I', s[:4])
 	return s[4:4+size[0]].decode('utf_16_be')
+
+class ShallowBattlePoke(object):
+
+	def __init__(self, is_me, msg=None):
+		if msg != None:
+			# First time the poke was sent out
+			self.poke_num = struct.unpack('>H', msg[:2])
+			self.sub_num = struct.unpack('>B', msg[2])
+			self.name = make_py_string(msg[3:])
+			if not is_me:
+				self.name = "the foe's " + self.name
+			self.offset = 7 + (len(self.name)*2) # poke_num + sub_num + name_size + name
+			self.hp_percent = struct.unpack('>B', msg[offset])
+			self.full_status = struct.unpack('>I', msg[offset+1:offset+5])
+			self.gender = struct.unpack('>B', msg[offset+5])
+			self.shiny = struct.unpack('>B', msg[offset+6])
+			self.level = struct.unpack('>B', msg[offset+7])
+			self.offset += 8
 
 # Poke as represented in a team
 class TeamPoke(object):
@@ -158,9 +224,36 @@ class BattleConf(object):
 		self.id_2 = struct.unpack('>I', msg[6:10])[0]
 		self.clauses = struct.unpack('>I', msg[10:14])[0]
 
+def recv_battle_cmd(msg):
+	cmd = struct.unpack('>B', msg[0])[0]
+	player = struct.unpack('>B', msg[1])[1]
+	if cmd == SENDOUT:
+		silent = struct.unpack('>B', msg[2])[0]
+		from_spot = struct.unpack('>B', msg[3])[0]
+		if (player == me):
+			temp = my_team.pokes[0] # current poke is always in pos 0
+			my_team.pokes[0] = my_team.pokes[from_spot]
+			my_team.pokes[from_spot] = temp
+
+		temp_poke = pokes[player][0]
+		pokes[player][0] = pokes[player][from_spot]
+		pokes[player][from_spot] = temp_poke
+		if len(msg[4:]):
+			# this is the first time you've seen it
+			pokes[player][0] = ShallowBattlePoke((player == me), msg[4:])
+		if not silent:
+			print 'Player ' + str(player) + ' sent out ' + pokes[player][0].name + '!'
+	else if cmd == SENDBACK:
+		silent = struct.unpack('>B', msg[2])
+		if not silent:
+			print 'Player ' + str(player) + ' called ' + pokes[player][0].name + ' back!'
+	else if cmd == USEATTACK
+		attack = struct.unpack('>H', msg[2:4])
+		silent = struct.unpack('>B', msg[4])
+
 s = PokeSocket('188.165.249.120', 5080)
 s.send(FullPlayerInfo('Twilio Client').serialize(), poke_socket.LOGIN); 
-s.recv() # Don't care about the server's response
+my_id = struct.unpack('>I', s.recv()[:4])
 
 # Find a battle
 flags = 2 # Only flag we want is forceSameTier
@@ -179,5 +272,17 @@ while 1:
 		if p1_id == 0: # This is us!
 			print 'Battle found!'
 			bc = BattleConf(msg[13:])
-			team = BattleTeam(msg[27:])
+			my_team = BattleTeam(msg[27:])
+			battle = True
+			pokes = [][]
+			for i in range(6):
+				pokes[0].append(ShallowBattlePoke(True))
+				pokes[1].append(ShallowBattlePoke(False))
+			if bc.id_1 == my_id:
+				me = 0
+				opp = 1
+			else:
+				me = 1
+				opp = 0
+	else if cmd == poke_socket.BattleMessage:
 s.close()
