@@ -223,6 +223,9 @@ class BattleConf(object):
 		self.id_2 = struct.unpack('>I', msg[6:10])[0]
 		self.clauses = struct.unpack('>I', msg[10:14])[0]
 
+def notify(msg):
+	print msg
+
 def recv_battle_cmd(msg):
 	cmd = struct.unpack('>B', msg[0])[0]
 	player = struct.unpack('>B', msg[1])[0]
@@ -241,49 +244,87 @@ def recv_battle_cmd(msg):
 			# this is the first time you've seen it
 			pokes[player][0] = ShallowBattlePoke((player == me), msg[4:])
 		if not silent:
-			print 'Player ' + str(player) + ' sent out ' + pokes[player][0].name + '!'
+			notify('Player ' + str(player) + ' sent out ' + pokes[player][0].name + '!')
 	elif cmd == SENDBACK:
-		silent = struct.unpack('>B', msg[2])
+		silent = struct.unpack('>B', msg[2])[0]
 		if not silent:
-			print 'Player ' + str(player) + ' called ' + pokes[player][0].name + ' back!'
+			notify('Player ' + str(player) + ' called ' + pokes[player][0].name + ' back!')
 	elif cmd == USEATTACK:
-		attack = struct.unpack('>H', msg[2:4])
-		silent = struct.unpack('>B', msg[4])
+		attack = struct.unpack('>H', msg[2:4])[0]
+		silent = struct.unpack('>B', msg[4])[0]
 		if not silent:
-			print pokes[player][0] + ' used attack ' + str(attack) + '!'
+			notify(pokes[player][0] + ' used attack ' + str(attack) + '!')
 	elif cmd == BEGINTURN:
-		turn = struct.unpack('>I', msg[2:6])
-		print 'Start of turn ' + str(turn)
+		turn = struct.unpack('>I', msg[2:6])[0]
+		notify('Start of turn ' + str(turn))
 	elif cmd == KO:
-		print pokes[player][0] + ' fainted!'
+		notify(pokes[player][0] + ' fainted!')
 	elif cmd == HIT:
 		num = struct.unpack('>B', msg[2])
-		print 'Hit ' + str(num) + ' time' + 's!' if num > 1 else '!'
+		notify('Hit ' + str(num) + ' time' + 's!' if num > 1 else '!')
 	elif cmd == EFFECTIVE:
-		eff = struct.unpack('>B', msg[2])
+		eff = struct.unpack('>B', msg[2])[0]
 		if eff == 0:
-			print 'It had no effect!'
+			notify('It had no effect!')
 		elif eff == 1 or eff == 2:
-			print "It's not very effective..."
+			notify("It's not very effective...")
 		elif eff == 8 or eff == 16:
-			print "It's super effective!"
+			notify("It's super effective!")
 	elif cmd == CRITICALHIT:
-		print 'A critical hit!'
+		notify('A critical hit!')
 	elif cmd == MISS:
-		print 'The attack of ' + pokes[player][0].name + ' missed!'
+		notify('The attack of ' + pokes[player][0].name + ' missed!')
 	elif cmd == AVOID:
-		print pokes[player][0].name + ' avoided the attack!'
+		notify(pokes[player][0].name + ' avoided the attack!')
 	elif cmd == STATCHANGE:
-		stat = struct.unpack('>B', msg[2])
-		boost = struct.unpack('>B', msg[3])
-		silent = struct.unpack('>B', msg[4])
+		stat = struct.unpack('>B', msg[2])[0]
+		boost = struct.unpack('>B', msg[3])[0]
+		silent = struct.unpack('>B', msg[4])[0]
 		if not silent:
-			print pokes[player][0].name + "'s stat number " + str(stat) + \
-			(' sharply' if abs(boost) > 1 else '') + ('rose!' if boost > 0 else 'fell!')
+			notify(pokes[player][0].name + "'s stat number " + str(stat) + \
+			(' sharply' if abs(boost) > 1 else '') + ('rose!' if boost > 0 else 'fell!'))
 	elif cmd == FAILED:
-		silent = struct.unpack('>B', msg[2])
+		silent = struct.unpack('>B', msg[2])[0]
 		if not silent:
-			print 'But it failed!'
+			notify('But it failed!')
+	elif cmd == NOOPPONENT:
+		notify('But there was no target...')
+	elif cmd == FLINCH:
+		notify(pokes[player][0].name + ' flinched!')
+	elif cmd == RECOIL:
+		damaging = struct.unpack('>B', msg[2])[0]
+		notify(pokes[player][0].name + ' is hit with recoil!' if damaging else ' had its energy drained!')
+	elif cmd == STRAIGHTDAMAGE:
+		damage = struct.unpack('>H', msg[2:4])[0]
+		if player == me:
+			notify(pokes[player][0].name + ' lost ' + str(damage) + ' HP!' + \
+					' (' + str(damage * 100 / my_team.pokes[0].total_hp) + '% of its health)')
+		else:
+			notify(pokes[player][0].name + ' lost ' + damage + '% of its health!')
+	elif cmd == BATTLEEND:
+		result = struct.unpack('>B', msg[2])[0]
+		if result == 2: # It was a tie
+			notify('The battle ended in a tie!')
+		else:
+			notify('Player ' + str(player) + ' won the battle!')
+	elif cmd == MAKEYOURCHOICE:
+		notify('Choose your destiny')
+	elif cmd == CHANGEHP:
+		new_hp = struct.unpack('>H', msg[2:4])[0]
+		if player == me:
+			my_team.pokes[0].current_hp = new_hp
+			pokes[player][0].hp_percent = new_hp * 100 / my_team.pokes[0].total_hp
+		else:
+			pokes[player][0].hp_percent = new_hp
+		notify(pokes[player][0].name + "'s new hp " + \
+				'percentage ' if player != me else '' + 'is ' + str(new_hp) + '!')
+	elif cmd == CHANGEPP:
+		move_num = struct.unpack('>B', msg[2])[0]
+		new_pp = struct.unpack('>B', msg[3])[0]
+		my_team.pokes[0].moves[move_num] = new_pp
+		notify('Move ' + str(move_num) + 's new PP is ' + str(new_pp) + '!')
+	else:
+		print 'Command unimplemented: ' + str(cmd)
 	
 
 s = PokeSocket('188.165.249.120', 5080)
