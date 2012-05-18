@@ -27,7 +27,7 @@ RECOIL = 21
 WEATHERMESSAGE = 22
 STRAIGHTDAMAGE = 23
 ABILITYMESSAGE = 24
-ABSSTATUSCHANGE, = 25
+ABSSTATUSCHANGE = 25
 SUBSTITUTE = 26
 BATTLEEND = 27
 BLANKMESSAGE = 28
@@ -68,14 +68,14 @@ class ShallowBattlePoke(object):
 			self.poke_num = struct.unpack('>H', msg[:2])
 			self.sub_num = struct.unpack('>B', msg[2])
 			self.name = make_py_string(msg[3:])
+			self.offset = 7 + len(self.name) # poke_num + sub_num + name_size + name
 			if not is_me:
 				self.name = "the foe's " + self.name
-			self.offset = 7 + (len(self.name)*2) # poke_num + sub_num + name_size + name
-			self.hp_percent = struct.unpack('>B', msg[offset])
-			self.full_status = struct.unpack('>I', msg[offset+1:offset+5])
-			self.gender = struct.unpack('>B', msg[offset+5])
-			self.shiny = struct.unpack('>B', msg[offset+6])
-			self.level = struct.unpack('>B', msg[offset+7])
+			self.hp_percent = struct.unpack('>B', msg[self.offset])
+			self.full_status = struct.unpack('>I', msg[self.offset+1:self.offset+5])
+			self.gender = struct.unpack('>B', msg[self.offset+5])
+			self.shiny = struct.unpack('>B', msg[self.offset+6])
+			self.level = struct.unpack('>B', msg[self.offset+7])
 			self.offset += 8
 
 # Poke as represented in a team
@@ -213,7 +213,6 @@ class BattleTeam(object):
 		for i in range(6):
 			self.pokes.append(BattlePoke(msg[offset:]))
 			offset += self.pokes[i].offset
-			print self.pokes[i].__dict__.items()
 
 class BattleConf(object):
 
@@ -226,7 +225,7 @@ class BattleConf(object):
 
 def recv_battle_cmd(msg):
 	cmd = struct.unpack('>B', msg[0])[0]
-	player = struct.unpack('>B', msg[1])[1]
+	player = struct.unpack('>B', msg[1])[0]
 	if cmd == SENDOUT:
 		silent = struct.unpack('>B', msg[2])[0]
 		from_spot = struct.unpack('>B', msg[3])[0]
@@ -243,13 +242,49 @@ def recv_battle_cmd(msg):
 			pokes[player][0] = ShallowBattlePoke((player == me), msg[4:])
 		if not silent:
 			print 'Player ' + str(player) + ' sent out ' + pokes[player][0].name + '!'
-	else if cmd == SENDBACK:
+	elif cmd == SENDBACK:
 		silent = struct.unpack('>B', msg[2])
 		if not silent:
 			print 'Player ' + str(player) + ' called ' + pokes[player][0].name + ' back!'
-	else if cmd == USEATTACK
+	elif cmd == USEATTACK:
 		attack = struct.unpack('>H', msg[2:4])
 		silent = struct.unpack('>B', msg[4])
+		if not silent:
+			print pokes[player][0] + ' used attack ' + str(attack) + '!'
+	elif cmd == BEGINTURN:
+		turn = struct.unpack('>I', msg[2:6])
+		print 'Start of turn ' + str(turn)
+	elif cmd == KO:
+		print pokes[player][0] + ' fainted!'
+	elif cmd == HIT:
+		num = struct.unpack('>B', msg[2])
+		print 'Hit ' + str(num) + ' time' + 's!' if num > 1 else '!'
+	elif cmd == EFFECTIVE:
+		eff = struct.unpack('>B', msg[2])
+		if eff == 0:
+			print 'It had no effect!'
+		elif eff == 1 or eff == 2:
+			print "It's not very effective..."
+		elif eff == 8 or eff == 16:
+			print "It's super effective!"
+	elif cmd == CRITICALHIT:
+		print 'A critical hit!'
+	elif cmd == MISS:
+		print 'The attack of ' + pokes[player][0].name + ' missed!'
+	elif cmd == AVOID:
+		print pokes[player][0].name + ' avoided the attack!'
+	elif cmd == STATCHANGE:
+		stat = struct.unpack('>B', msg[2])
+		boost = struct.unpack('>B', msg[3])
+		silent = struct.unpack('>B', msg[4])
+		if not silent:
+			print pokes[player][0].name + "'s stat number " + str(stat) + \
+			(' sharply' if abs(boost) > 1 else '') + ('rose!' if boost > 0 else 'fell!')
+	elif cmd == FAILED:
+		silent = struct.unpack('>B', msg[2])
+		if not silent:
+			print 'But it failed!'
+	
 
 s = PokeSocket('188.165.249.120', 5080)
 s.send(FullPlayerInfo('Twilio Client').serialize(), poke_socket.LOGIN); 
@@ -274,7 +309,11 @@ while 1:
 			bc = BattleConf(msg[13:])
 			my_team = BattleTeam(msg[27:])
 			battle = True
-			pokes = [][]
+			pokes = []
+			my_pokes = []
+			opp_pokes = []
+			pokes.append(my_pokes)
+			pokes.append(opp_pokes)
 			for i in range(6):
 				pokes[0].append(ShallowBattlePoke(True))
 				pokes[1].append(ShallowBattlePoke(False))
@@ -284,5 +323,7 @@ while 1:
 			else:
 				me = 1
 				opp = 0
-	else if cmd == poke_socket.BattleMessage:
+	elif cmd == poke_socket.BATTLEMESSAGE:
+		# Discard the first two ints, unneeded
+		recv_battle_cmd(msg[9:])
 s.close()
