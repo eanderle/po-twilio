@@ -1,6 +1,7 @@
 import struct
 from poke_socket import PokeSocket
 import poke_socket
+import random
 
 SENDOUT = 0
 SENDBACK = 1
@@ -226,6 +227,16 @@ class BattleConf(object):
 def notify(msg):
 	print msg
 
+def construct_attack(attack):
+	notify('Sent attack ' + str(attack))
+	return struct.pack('>IBBBB', battle_id, me, 1, attack, opp)
+
+def construct_switch(slot):
+	return struct.pack('>IBBB', battle_id, me, 2, slot)
+
+def construct_draw():
+	return struct.pack('>IBB', battle_id, me, 5)
+
 def recv_battle_cmd(msg):
 	cmd = struct.unpack('>B', msg[0])[0]
 	player = struct.unpack('>B', msg[1])[0]
@@ -253,7 +264,7 @@ def recv_battle_cmd(msg):
 		attack = struct.unpack('>H', msg[2:4])[0]
 		silent = struct.unpack('>B', msg[4])[0]
 		if not silent:
-			notify(pokes[player][0] + ' used attack ' + str(attack) + '!')
+			notify(pokes[player][0].name + ' used attack ' + str(attack) + '!')
 	elif cmd == BEGINTURN:
 		turn = struct.unpack('>I', msg[2:6])[0]
 		notify('Start of turn ' + str(turn))
@@ -282,7 +293,7 @@ def recv_battle_cmd(msg):
 		silent = struct.unpack('>B', msg[4])[0]
 		if not silent:
 			notify(pokes[player][0].name + "'s stat number " + str(stat) + \
-			(' sharply' if abs(boost) > 1 else '') + ('rose!' if boost > 0 else 'fell!'))
+			(' sharply ' if abs(boost) > 1 else '') + ('rose!' if boost > 0 else 'fell!'))
 	elif cmd == FAILED:
 		silent = struct.unpack('>B', msg[2])[0]
 		if not silent:
@@ -300,7 +311,7 @@ def recv_battle_cmd(msg):
 			notify(pokes[player][0].name + ' lost ' + str(damage) + ' HP!' + \
 					' (' + str(damage * 100 / my_team.pokes[0].total_hp) + '% of its health)')
 		else:
-			notify(pokes[player][0].name + ' lost ' + damage + '% of its health!')
+			notify(pokes[player][0].name + ' lost ' + str(damage) + '% of its health!')
 	elif cmd == BATTLEEND:
 		result = struct.unpack('>B', msg[2])[0]
 		if result == 2: # It was a tie
@@ -309,6 +320,7 @@ def recv_battle_cmd(msg):
 			notify('Player ' + str(player) + ' won the battle!')
 	elif cmd == MAKEYOURCHOICE:
 		notify('Choose your destiny')
+		s.send(construct_attack(random.randint(0,3)), poke_socket.BATTLEMESSAGE) # random attack!
 	elif cmd == CHANGEHP:
 		new_hp = struct.unpack('>H', msg[2:4])[0]
 		if player == me:
@@ -316,8 +328,7 @@ def recv_battle_cmd(msg):
 			pokes[player][0].hp_percent = new_hp * 100 / my_team.pokes[0].total_hp
 		else:
 			pokes[player][0].hp_percent = new_hp
-		notify(pokes[player][0].name + "'s new hp " + \
-				'percentage ' if player != me else '' + 'is ' + str(new_hp) + '!')
+		notify(pokes[player][0].name + "'s new hp " + ('percentage ' if player != me else '') + 'is ' + str(new_hp) + '!')
 	elif cmd == CHANGEPP:
 		move_num = struct.unpack('>B', msg[2])[0]
 		new_pp = struct.unpack('>B', msg[3])[0]
@@ -329,42 +340,46 @@ def recv_battle_cmd(msg):
 
 s = PokeSocket('188.165.249.120', 5080)
 s.send(FullPlayerInfo('Twilio Client').serialize(), poke_socket.LOGIN); 
-my_id = struct.unpack('>I', s.recv()[:4])
 
 # Find a battle
-flags = 2 # Only flag we want is forceSameTier
-msg = struct.pack('>I', flags)
-msg = struct.pack('>B', 200) # range
-msg = struct.pack('>B', 0) # Don't really know why this is needed
-s.send(msg, poke_socket.FINDBATTLE)
-
 while 1:
-	msg = s.recv()
-	cmd = struct.unpack('>B', msg[0])[0]
-	if cmd == poke_socket.ENGAGEBATTLE:
-		battle_id = struct.unpack('>I', msg[1:5])[0]
-		p1_id = struct.unpack('>I', msg[5:9])[0]
-		p2_id = struct.unpack('>I', msg[9:13])[0]
-		if p1_id == 0: # This is us!
-			print 'Battle found!'
-			bc = BattleConf(msg[13:])
-			my_team = BattleTeam(msg[27:])
-			battle = True
-			pokes = []
-			my_pokes = []
-			opp_pokes = []
-			pokes.append(my_pokes)
-			pokes.append(opp_pokes)
-			for i in range(6):
-				pokes[0].append(ShallowBattlePoke(True))
-				pokes[1].append(ShallowBattlePoke(False))
-			if bc.id_1 == my_id:
-				me = 0
-				opp = 1
-			else:
-				me = 1
-				opp = 0
-	elif cmd == poke_socket.BATTLEMESSAGE:
-		# Discard the first two ints, unneeded
-		recv_battle_cmd(msg[9:])
-s.close()
+	flags = 2 # Only flag we want is forceSameTier
+	msg = struct.pack('>I', flags)
+	msg = struct.pack('>B', 200) # range
+	msg = struct.pack('>B', 0) # Don't really know why this is needed
+	s.send(msg, poke_socket.FINDBATTLE)
+
+	while 1:
+		msg = s.recv()
+		cmd = struct.unpack('>B', msg[0])[0]
+		if cmd == poke_socket.LOGIN:
+			my_id = struct.unpack('>I', msg[1:5])[0]
+		if cmd == poke_socket.ENGAGEBATTLE:
+			battle_id = struct.unpack('>I', msg[1:5])[0]
+			p1_id = struct.unpack('>I', msg[5:9])[0]
+			p2_id = struct.unpack('>I', msg[9:13])[0]
+			if p1_id == 0: # This is us!
+				print 'Battle found!'
+				print 'p1_id: ' + str(p1_id) + ' p2_id: ' + str(p2_id)
+				bc = BattleConf(msg[13:])
+				print 'my_id: ' + str(my_id) + ' bc.id_1: ' + str(bc.id_1) + ' bc.id_2: ' + str(bc.id_2)
+				my_team = BattleTeam(msg[27:])
+				battle = True
+				pokes = []
+				my_pokes = []
+				opp_pokes = []
+				pokes.append(my_pokes)
+				pokes.append(opp_pokes)
+				for i in range(6):
+					pokes[0].append(ShallowBattlePoke(True))
+					pokes[1].append(ShallowBattlePoke(False))
+				if bc.id_1 == my_id:
+					me = 0
+					opp = 1
+				else:
+					me = 1
+					opp = 0
+		elif cmd == poke_socket.BATTLEMESSAGE:
+			# Discard the first two ints, unneeded
+			recv_battle_cmd(msg[9:])
+	s.close()
